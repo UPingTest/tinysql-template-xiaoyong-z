@@ -1,3 +1,5 @@
+# 个人简介
+赵骁勇，2021年6月毕业于武汉理工大学计算机科学与技术，预计9月去清华大学深圳国际研究生院读研，目前在DolphinDB担任研发实习生。
 # Project 1: Relational Algebra
 ## 解题思路
 本次作业的主要工作是实现DecodeRecordKey和DecodeIndexKeyPrefix函数。
