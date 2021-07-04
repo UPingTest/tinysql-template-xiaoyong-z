@@ -869,6 +869,7 @@ import (
 	ValuesOpt		"values optional"
 	VariableAssignment	"set variable value"
 	VariableAssignmentList	"set variable value list"
+	OnClause		"On clause"
 	WhereClause		"WHERE clause"
 	WhereClauseOptional	"Optional WHERE clause"
 	WithValidation		"with validation"
@@ -3809,7 +3810,16 @@ JoinTable:
 	{
 		$$ = &ast.Join{Left: $1.(ast.ResultSetNode), Right: $3.(ast.ResultSetNode), Tp: ast.CrossJoin}
 	}
-	/* Your code here. */
+|	TableRef JoinType "JOIN" TableRef OnClause %prec tableRefPriority
+	{
+		$$ = &ast.Join{Left: $1.(ast.ResultSetNode), Right: $4.(ast.ResultSetNode), Tp: $2.(ast.JoinType), On: $5.(*ast.OnCondition)}
+	}
+
+OnClause:
+	"ON" Expression
+	{
+		$$ = &ast.OnCondition{Expr: $2.(ast.ExprNode)}
+	}
 
 JoinType:
 	"LEFT"
