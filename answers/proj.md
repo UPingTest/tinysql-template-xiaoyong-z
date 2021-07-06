@@ -1,5 +1,3 @@
-# 个人简介
-赵骁勇，2021年6月毕业于武汉理工大学计算机科学与技术，预计9月去清华大学深圳国际研究生院读研，目前在DolphinDB担任研发实习生。
 # Project 1: Relational Algebra
 ## 解题思路
 本次作业的主要工作是实现DecodeRecordKey和DecodeIndexKeyPrefix函数。
@@ -170,4 +168,69 @@ OnClause:
 	{
 		$$ = &ast.OnCondition{Expr: $2.(ast.ExprNode)}
 	}
+```
+
+# Project 2: Parser
+## 解题思路
+本次作业的主要工作为`Drop Column`添加部分代码，dropColumn的schema状态变化顺序为 `public -> write only -> delete only -> reorganization -> absent`，在实现的时候只需要参考这个顺序即可。在状态变化为absent之后，调用
+adjustColumnInfoInDropColumn来更新tblInfo中的column信息。除此之外，在进入onDropColumn的时候要处理colInfo.DefaultValue中的边界条件。
+```go
+func onDropColumn(t *meta.Meta, job *model.Job) (ver int64, _ error) {
+	tblInfo, colInfo, err := checkDropColumn(t, job)
+	if err != nil {
+		return ver, errors.Trace(err)
+	}
+
+	// set the column default value
+	colInfo.DefaultValue, err = generateOriginDefaultValue(colInfo);
+	if err != nil {
+		return ver, errors.Trace(err)
+	}
+
+	originalState := colInfo.State
+	// TODO: fill the codes of the case `StatePublic`, `StateWriteOnly` and `StateDeleteOnly`.
+	//       You'll need to find the right place where to put the function `adjustColumnInfoInDropColumn`.
+	//       Also you'll need to take a corner case about the default value.
+	//       (Think about how the not null property and default value will influence the `Drop Column` operation.
+	switch colInfo.State {
+	case model.StatePublic:
+		// To be filled
+		// public -> write only
+		job.SchemaState = model.StateWriteOnly
+		colInfo.State = model.StateWriteOnly
+		ver, err = updateVersionAndTableInfoWithCheck(t, job, tblInfo, originalState != colInfo.State)
+	case model.StateWriteOnly:
+		// To be filled
+		// write only -> delete only
+		job.SchemaState = model.StateDeleteOnly
+		colInfo.State = model.StateDeleteOnly
+		ver, err = updateVersionAndTableInfo(t, job, tblInfo, originalState != colInfo.State)
+	case model.StateDeleteOnly:
+		// To be filled
+		// delete only -> reorganization
+		job.SchemaState = model.StateDeleteReorganization
+		colInfo.State = model.StateDeleteReorganization
+		ver, err = updateVersionAndTableInfo(t, job, tblInfo, originalState != colInfo.State)
+	case model.StateDeleteReorganization:
+		// reorganization -> absent
+		// All reorganization jobs are done, drop this column.
+		adjustColumnInfoInDropColumn(tblInfo, colInfo.Offset)
+		tblInfo.Columns = tblInfo.Columns[:len(tblInfo.Columns)-1]
+		colInfo.State = model.StateNone
+		ver, err = updateVersionAndTableInfo(t, job, tblInfo, originalState != colInfo.State)
+		if err != nil {
+			return ver, errors.Trace(err)
+		}
+
+		// Finish this job.
+		if job.IsRollingback() {
+			job.FinishTableJob(model.JobStateRollbackDone, model.StateNone, ver, tblInfo)
+		} else {
+			job.FinishTableJob(model.JobStateDone, model.StateNone, ver, tblInfo)
+		}
+	default:
+		err = errInvalidDDLJob.GenWithStackByArgs("table", tblInfo.State)
+	}
+	return ver, errors.Trace(err)
+}
 ```
